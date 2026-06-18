@@ -1,6 +1,6 @@
 """Couple Finance plugin — expense tracking with SQLite storage."""
 import json
-from datetime import date, datetime
+from datetime import date
 
 from .db import (
     add_expense, list_expenses, report_by_category, report_by_payer,
