@@ -173,7 +173,7 @@ def report_summary(date_from, date_to, base_dir=None):
 
 def delete_expense(expense_id, base_dir=None):
     with closing(get_connection(base_dir)) as conn:
-        cur = conn.execute("UPDATE expenses SET is_deleted=1 WHERE id=?", (expense_id,))
+        cur = conn.execute("UPDATE expenses SET is_deleted=1 WHERE id=? AND is_deleted=0", (expense_id,))
         conn.commit()
         return cur.rowcount > 0
 
