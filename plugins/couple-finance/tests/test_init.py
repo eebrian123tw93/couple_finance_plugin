@@ -7,13 +7,14 @@ from pathlib import Path
 
 import pytest
 
-# Load the couple_finance package from the hyphenated directory
-pkg_dir = Path(__file__).resolve().parent.parent
+# Load the couple_finance package from the hyphenated directory.
+pkg_dir = Path(__file__).resolve().parent.parent  # couple-finance/
 init_path = pkg_dir / "__init__.py"
+
 spec = importlib.util.spec_from_file_location(
     "couple_finance",
     str(init_path),
-    submodule_search_locations=[str(pkg_dir)]
+    submodule_search_locations=[str(pkg_dir)],
 )
 cf = importlib.util.module_from_spec(spec)
 sys.modules["couple_finance"] = cf
@@ -36,18 +37,27 @@ class MockCtx:
 
 
 @pytest.fixture
+def tmp_db_path(tmp_path):
+    """Return a temporary directory path for isolated DB testing."""
+    return str(tmp_path)
+
+
+@pytest.fixture
 def mock_ctx():
+    """Provide a MockCtx instance for testing register()."""
     return MockCtx()
 
 
+# ===================================================================
+# register() tests
+# ===================================================================
+
 class TestRegister:
     def test_register_calls_six_tools(self, mock_ctx):
-        """register() should call ctx.register_tool() exactly 6 times."""
         cf.register(mock_ctx)
         assert len(mock_ctx.tools) == 6
 
     def test_register_tool_names(self, mock_ctx):
-        """All 6 tool names are registered correctly."""
         cf.register(mock_ctx)
         names = [t["name"] for t in mock_ctx.tools]
         assert "expense_add" in names
@@ -58,13 +68,11 @@ class TestRegister:
         assert "expense_config" in names
 
     def test_register_toolset(self, mock_ctx):
-        """All tools belong to the 'couple-finance' toolset."""
         cf.register(mock_ctx)
         for tool in mock_ctx.tools:
             assert tool["toolset"] == "couple-finance"
 
     def test_register_schemas_present(self, mock_ctx):
-        """Each tool has a schema with name, description, and parameters."""
         cf.register(mock_ctx)
         for tool in mock_ctx.tools:
             schema = tool["schema"]
@@ -73,22 +81,20 @@ class TestRegister:
             assert "parameters" in schema
 
     def test_register_handlers_callable(self, mock_ctx):
-        """Each registered handler is callable."""
         cf.register(mock_ctx)
         for tool in mock_ctx.tools:
             assert callable(tool["handler"])
 
 
+# ===================================================================
+# _handle_expense_add tests
+# ===================================================================
+
 class TestHandleExpenseAdd:
     def test_success(self, tmp_db_path):
-        """Add expense returns ok=True with id."""
         result = cf._handle_expense_add({
-            "amount": 100,
-            "category": "餐飲",
-            "payer": "Brian",
-            "date": "2025-06-18",
-            "split_method": "50/50",
-            "note": "午餐",
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
             "base_dir": tmp_db_path,
         })
         data = json.loads(result)
@@ -96,18 +102,39 @@ class TestHandleExpenseAdd:
         assert isinstance(data["id"], int)
 
     def test_missing_amount(self, tmp_db_path):
-        """Missing required 'amount' returns error."""
         result = cf._handle_expense_add({
-            "category": "餐飲",
-            "base_dir": tmp_db_path,
+            "category": "餐飲", "base_dir": tmp_db_path,
         })
         data = json.loads(result)
         assert "error" in data
 
+    def test_defaults(self, tmp_db_path):
+        result = cf._handle_expense_add({"amount": 50, "base_dir": tmp_db_path})
+        data = json.loads(result)
+        assert data["ok"] is True
+
+    def test_multiple_adds(self, tmp_db_path):
+        r1 = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        r2 = cf._handle_expense_add({
+            "amount": 200, "category": "交通", "payer": "Partner",
+            "date": "2025-06-19", "split_method": "各付各", "note": "計程車",
+            "base_dir": tmp_db_path,
+        })
+        d1 = json.loads(r1)
+        d2 = json.loads(r2)
+        assert d1["id"] < d2["id"]
+
+
+# ===================================================================
+# _handle_expense_list tests
+# ===================================================================
 
 class TestHandleExpenseList:
     def test_default_list(self, tmp_db_path):
-        """List returns expenses from the specified DB."""
         cf._handle_expense_add({
             "amount": 100, "category": "餐飲", "payer": "Brian",
             "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
@@ -119,16 +146,66 @@ class TestHandleExpenseList:
         assert len(data["expenses"]) == 1
 
     def test_empty_db(self, tmp_db_path):
-        """List on empty DB returns empty list."""
         result = cf._handle_expense_list({"base_dir": tmp_db_path})
         data = json.loads(result)
         assert data["ok"] is True
         assert data["expenses"] == []
 
+    def test_filter_by_category(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        cf._handle_expense_add({
+            "amount": 200, "category": "交通", "payer": "Partner",
+            "date": "2025-06-19", "split_method": "各付各", "note": "計程車",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_list({
+            "category": "餐飲", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert len(data["expenses"]) == 1
+        assert data["expenses"][0]["category"] == "餐飲"
+
+    def test_filter_by_date_range(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        cf._handle_expense_add({
+            "amount": 200, "category": "交通", "payer": "Partner",
+            "date": "2025-07-19", "split_method": "各付各", "note": "計程車",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_list({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert len(data["expenses"]) == 1
+
+    def test_deleted_excluded(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+        cf._handle_expense_delete({"expense_id": eid, "base_dir": tmp_db_path})
+        result = cf._handle_expense_list({"base_dir": tmp_db_path})
+        data = json.loads(result)
+        assert len(data["expenses"]) == 0
+
+
+# ===================================================================
+# _handle_expense_report tests
+# ===================================================================
 
 class TestHandleExpenseReport:
     def test_with_data(self, tmp_db_path):
-        """Report returns by_category, by_payer, summary, owes."""
         cf._handle_expense_add({
             "amount": 100, "category": "餐飲", "payer": "Brian",
             "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
@@ -146,21 +223,55 @@ class TestHandleExpenseReport:
         assert "owes" in data
 
     def test_empty_db(self, tmp_db_path):
-        """Report on empty DB returns summary with default structure."""
         result = cf._handle_expense_report({
             "date_from": "2025-06-01", "date_to": "2025-06-30",
             "base_dir": tmp_db_path,
         })
         data = json.loads(result)
         assert data["ok"] is True
-        assert data["by_category"] == []
-        assert data["by_payer"] == []
-        assert data["owes"] == []
+        assert data["summary"]["total_count"] == 0
 
+    def test_by_category_totals(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        cf._handle_expense_add({
+            "amount": 200, "category": "餐飲", "payer": "Partner",
+            "date": "2025-06-19", "split_method": "各付各", "note": "晚餐",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_report({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        categories = {item["category"]: item for item in data["by_category"]}
+        assert "餐飲" in categories
+        assert categories["餐飲"]["total"] == 300
+
+    def test_owes_calculation(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_report({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert len(data["owes"]) >= 1
+        assert any(o["to"] == "Brian" for o in data["owes"])
+
+
+# ===================================================================
+# _handle_expense_delete tests
+# ===================================================================
 
 class TestHandleExpenseDelete:
     def test_success(self, tmp_db_path):
-        """Delete existing expense returns deleted=True."""
         add_result = cf._handle_expense_add({
             "amount": 100, "category": "餐飲", "payer": "Brian",
             "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
@@ -173,16 +284,32 @@ class TestHandleExpenseDelete:
         assert data["deleted"] is True
 
     def test_nonexistent_id(self, tmp_db_path):
-        """Delete nonexistent ID returns deleted=False."""
         result = cf._handle_expense_delete({"expense_id": 9999, "base_dir": tmp_db_path})
         data = json.loads(result)
         assert data["ok"] is True
         assert data["deleted"] is False
 
+    def test_double_delete(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        r1 = cf._handle_expense_delete({"expense_id": eid, "base_dir": tmp_db_path})
+        assert json.loads(r1)["deleted"] is True
+
+        r2 = cf._handle_expense_delete({"expense_id": eid, "base_dir": tmp_db_path})
+        assert json.loads(r2)["deleted"] is False
+
+
+# ===================================================================
+# _handle_expense_search tests
+# ===================================================================
 
 class TestHandleExpenseSearch:
     def test_found(self, tmp_db_path):
-        """Search finds expenses matching keyword."""
         cf._handle_expense_add({
             "amount": 800, "category": "餐飲", "payer": "Brian",
             "date": "2025-06-18", "split_method": "50/50", "note": "火鍋聚餐",
@@ -194,31 +321,96 @@ class TestHandleExpenseSearch:
         assert len(data["results"]) >= 1
 
     def test_not_found(self, tmp_db_path):
-        """Search with no matches returns empty list."""
-        result = cf._handle_expense_search({"keyword": "不存在的關鍵字", "base_dir": tmp_db_path})
+        result = cf._handle_expense_search({
+            "keyword": "不存在的關鍵字", "base_dir": tmp_db_path,
+        })
         data = json.loads(result)
         assert data["ok"] is True
         assert data["results"] == []
 
+    def test_search_by_category(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 800, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_search({"keyword": "餐飲", "base_dir": tmp_db_path})
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert len(data["results"]) >= 1
+
+    def test_deleted_excluded(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 800, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "火鍋聚餐",
+            "base_dir": tmp_db_path,
+        })
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+        cf._handle_expense_delete({"expense_id": eid, "base_dir": tmp_db_path})
+
+        result = cf._handle_expense_search({"keyword": "午餐", "base_dir": tmp_db_path})
+        data = json.loads(result)
+        assert data["ok"] is True
+        for r in data["results"]:
+            assert r.get("note") != "午餐"
+
+
+# ===================================================================
+# _handle_expense_config tests
+# ===================================================================
 
 class TestHandleExpenseConfig:
     def test_get_default(self, tmp_db_path):
-        """Get default payer1 returns 'Brian'."""
-        result = cf._handle_expense_config({"action": "get", "key": "payer1", "base_dir": tmp_db_path})
+        result = cf._handle_expense_config({
+            "action": "get", "key": "payer1", "base_dir": tmp_db_path,
+        })
         data = json.loads(result)
         assert data["ok"] is True
         assert data["value"] == "Brian"
 
+    def test_get_payer2_default(self, tmp_db_path):
+        result = cf._handle_expense_config({
+            "action": "get", "key": "payer2", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["value"] == "Partner"
+
     def test_set_and_get(self, tmp_db_path):
-        """Set payer1 to '小明' then get it."""
-        cf._handle_expense_config({"action": "set", "key": "payer1", "value": "小明", "base_dir": tmp_db_path})
-        result = cf._handle_expense_config({"action": "get", "key": "payer1", "base_dir": tmp_db_path})
+        cf._handle_expense_config({
+            "action": "set", "key": "payer1", "value": "小明", "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_config({
+            "action": "get", "key": "payer1", "base_dir": tmp_db_path,
+        })
         data = json.loads(result)
         assert data["value"] == "小明"
 
+    def test_set_returns_updated(self, tmp_db_path):
+        result = cf._handle_expense_config({
+            "action": "set", "key": "payer1", "value": "TestUser", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["updated"] is True
+
     def test_invalid_action(self, tmp_db_path):
-        """Invalid action returns error."""
-        result = cf._handle_expense_config({"action": "delete", "key": "payer1", "base_dir": tmp_db_path})
+        result = cf._handle_expense_config({
+            "action": "delete", "key": "payer1", "base_dir": tmp_db_path,
+        })
         data = json.loads(result)
         assert "error" in data
         assert "Unknown action" in data["error"]
+
+    def test_get_nonexistent_key(self, tmp_db_path):
+        result = cf._handle_expense_config({
+            "action": "get", "key": "nonexistent_key", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["value"] is None

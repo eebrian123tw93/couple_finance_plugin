@@ -2,11 +2,19 @@
 import json
 from datetime import date
 
-from .db import (
-    add_expense, list_expenses, report_by_category, report_by_payer,
-    report_summary, delete_expense, search_expenses, compute_owes,
-    get_config, set_config,
-)
+try:
+    from .db import (
+        add_expense, list_expenses, report_by_category, report_by_payer,
+        report_summary, delete_expense, search_expenses, compute_owes,
+        get_config, set_config,
+    )
+except ImportError:
+    # pytest discovers hyphenated dirs as test modules; use absolute imports
+    from db import (
+        add_expense, list_expenses, report_by_category, report_by_payer,
+        report_summary, delete_expense, search_expenses, compute_owes,
+        get_config, set_config,
+    )
 
 # --- Tool Schemas ---
 

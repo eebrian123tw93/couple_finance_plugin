@@ -440,7 +440,7 @@ class TestConfig:
 
     def test_default_config_not_overwritten_by_set_other_key(self, tmp_db_path):
         """Setting a non-default config key doesn't affect default values."""
-        set_config("theme", "light")
+        set_config("theme", "light", base_dir=tmp_db_path)
         row1 = get_config("payer1", base_dir=tmp_db_path)
         row2 = get_config("payer2", base_dir=tmp_db_path)
         assert row1["value"] == "Brian"
