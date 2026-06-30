@@ -6,14 +6,14 @@ try:
     from .db import (
         add_expense, list_expenses, report_by_category, report_by_payer,
         report_summary, delete_expense, search_expenses, compute_owes,
-        get_config, set_config,
+        get_config, set_config, normalize_category, translate_category,
     )
 except ImportError:
     # pytest discovers hyphenated dirs as test modules; use absolute imports
     from db import (
         add_expense, list_expenses, report_by_category, report_by_payer,
         report_summary, delete_expense, search_expenses, compute_owes,
-        get_config, set_config,
+        get_config, set_config, normalize_category, translate_category,
     )
 
 # --- Tool Schemas ---
@@ -25,10 +25,10 @@ EXPENSE_ADD_SCHEMA = {
         "type": "object",
         "properties": {
             "amount": {"type": "number", "description": "Expense amount (required)"},
-            "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他"], "description": "Expense category. Infer from context."},
+            "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他", "dining", "transport", "shopping", "entertainment", "housing", "utilities", "medical", "education", "other"], "description": "Expense category — accepts Chinese (e.g. 餐飲) or English (e.g. dining). Infer from context."},
             "date": {"type": "string", "description": "Date in YYYY-MM-DD format. Default to today if not specified."},
-            "payer": {"type": "string", "description": "Who paid: Brian, Partner, or 共同"},
-            "split_method": {"type": "string", "description": "How to split: 50/50, 60/40, 各付各, or empty"},
+            "payer": {"type": "string", "description": "Who paid (e.g. Brian, Partner, 共同)"},
+            "split_method": {"type": "string", "description": "How to split: 50/50, 60/40, 各付各 / each-pays-own, or empty"},
             "note": {"type": "string", "description": "Free-text description of the expense"}
         },
         "required": ["amount"]
@@ -43,8 +43,8 @@ EXPENSE_LIST_SCHEMA = {
         "properties": {
             "date_from": {"type": "string", "description": "Start date YYYY-MM-DD (inclusive)"},
             "date_to": {"type": "string", "description": "End date YYYY-MM-DD (inclusive)"},
-            "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他"], "description": "Filter by category"},
-            "payer": {"type": "string", "description": "Filter by payer: Brian, Partner, or 共同"},
+            "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他", "dining", "transport", "shopping", "entertainment", "housing", "utilities", "medical", "education", "other"], "description": "Filter by category — accepts Chinese or English"},
+            "payer": {"type": "string", "description": "Filter by payer (e.g. Brian, Partner, 共同)"},
             "limit": {"type": "integer", "description": "Max results (default 50, max 200)"},
             "offset": {"type": "integer", "description": "Skip N results for pagination"}
         },
@@ -111,7 +111,7 @@ EXPENSE_CONFIG_SCHEMA = {
 def _handle_expense_add(args: dict, **kw) -> str:
     try:
         amount = args["amount"]
-        category = args.get("category", "其他")
+        category = normalize_category(args.get("category", "其他"))
         expense_date = args.get("date", date.today().isoformat())
         payer = args.get("payer", "")
         split_method = args.get("split_method", "")
@@ -127,10 +127,12 @@ def _handle_expense_add(args: dict, **kw) -> str:
 def _handle_expense_list(args: dict, **kw) -> str:
     try:
         base_dir = args.get("base_dir")
+        raw_category = args.get("category")
+        category = normalize_category(raw_category) if raw_category else None
         expenses = list_expenses(
             date_from=args.get("date_from"),
             date_to=args.get("date_to"),
-            category=args.get("category"),
+            category=category,
             payer=args.get("payer"),
             limit=args.get("limit", 50),
             offset=args.get("offset", 0),
@@ -152,6 +154,13 @@ def _handle_expense_report(args: dict, **kw) -> str:
         by_payer = report_by_payer(date_from, date_to, base_dir=base_dir)
         summary = report_summary(date_from, date_to, base_dir=base_dir) or {}
         owes = compute_owes(date_from, date_to, base_dir=base_dir)
+
+        config_row = get_config("language", base_dir=base_dir)
+        lang = (config_row or {}).get("value", "zh")
+
+        if lang == "en":
+            for item in by_category:
+                item["category"] = translate_category(item.get("category", ""), lang)
 
         return json.dumps({
             "ok": True,

@@ -164,3 +164,51 @@ class TestE2EEdgeCases:
         assert data["ok"] is True
         items = list_expenses(base_dir=tmp_db_path)
         assert items[0]["category"] == "其他"
+
+
+class TestE2EBilingual:
+    """End-to-end test for bilingual category support."""
+
+    def test_english_input_chinese_storage(self, tmp_db_path):
+        add_expense("2025-06-18", 85, "dining", "Brian", "50/50", "breakfast", base_dir=tmp_db_path)
+        add_expense("2025-06-18", 200, "transport", "Partner", "each-pays-own", "taxi", base_dir=tmp_db_path)
+        add_expense("2025-06-18", 800, "dining", "Brian", "60/40", "hotpot", base_dir=tmp_db_path)
+
+        all_expenses = list_expenses(base_dir=tmp_db_path)
+        assert len(all_expenses) == 3
+        assert all_expenses[0]["category"] == "dining"
+        assert all_expenses[1]["category"] == "transport"
+        assert all_expenses[2]["category"] == "dining"
+
+        by_cat = report_by_category("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        cat_dict = {r["category"]: r for r in by_cat}
+        assert "dining" in cat_dict
+        assert "transport" in cat_dict
+        assert cat_dict["dining"]["total"] == 85 + 800
+
+    def test_english_category_filter(self, tmp_db_path):
+        add_expense("2025-06-18", 85, "dining", "Brian", "50/50", "breakfast", base_dir=tmp_db_path)
+        add_expense("2025-06-18", 200, "transport", "Partner", "50/50", "taxi", base_dir=tmp_db_path)
+
+        dining = list_expenses(category="dining", base_dir=tmp_db_path)
+        assert len(dining) == 1
+
+    def test_report_english_output(self, tmp_db_path):
+        set_config("language", "en", base_dir=tmp_db_path)
+        add_expense("2025-06-18", 100, "dining", "Brian", "50/50", "lunch", base_dir=tmp_db_path)
+
+        result = cf._handle_expense_report({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        for item in data["by_category"]:
+            assert item["category"] == "dining"
+
+    def test_owes_skip_each_pays_own(self, tmp_db_path):
+        add_expense("2025-06-18", 100, "dining", "Brian", "each-pays-own", "lunch", base_dir=tmp_db_path)
+        add_expense("2025-06-18", 200, "dining", "Brian", "50/50", "dinner", base_dir=tmp_db_path)
+
+        owes = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(owes) == 1
+        assert owes[0]["amount"] == 100.0

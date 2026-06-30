@@ -107,6 +107,10 @@ plugins/couple-finance/
 - 目錄名稱含連字號（`couple-finance/`）導致 pytest 匯入問題，解決方式請參閱 `conftest.py` 及 `__init__.py` 中的雙重匯入模式
 - `expense_edit` 是規劃中的第 7 個工具（詳見 `.sisyphus/plans/expense-edit.md`）
 
+### AI 輔助開發
+
+本專案藉助 [OpenCode](https://opencode.cloud) 開發。OpenCode 是一個由 AI 驅動的程式碼代理（Sisyphus），在 OhMyOpenCode 的編排下協作完成。包括架構決策、程式碼生成、測試編寫及文件撰寫，皆為人機協作的成果。
+
 ## 授權條款
 
 MIT

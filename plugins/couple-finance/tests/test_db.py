@@ -478,3 +478,100 @@ class TestGetConnection:
             table_names = [dict(t)["name"] for t in tables]
             assert "expenses_fts" in table_names
             conn.close()
+
+
+class TestNormalizeCategory:
+    """normalize_category maps Chinese/English to canonical Chinese."""
+
+    def test_normalize_chinese(self):
+        from db import normalize_category
+        assert normalize_category("餐飲") == "餐飲"
+        assert normalize_category("交通") == "交通"
+        assert normalize_category("其他") == "其他"
+
+    def test_normalize_english(self):
+        from db import normalize_category
+        assert normalize_category("dining") == "餐飲"
+        assert normalize_category("transport") == "交通"
+        assert normalize_category("other") == "其他"
+
+    def test_normalize_english_case_insensitive(self):
+        from db import normalize_category
+        assert normalize_category("Dining") == "餐飲"
+        assert normalize_category("Transport") == "交通"
+
+    def test_normalize_unknown_returns_as_is(self):
+        from db import normalize_category
+        assert normalize_category("unknown_category") == "unknown_category"
+
+    def test_normalize_none(self):
+        from db import normalize_category
+        assert normalize_category("") == ""
+        assert normalize_category(None) is None
+
+
+class TestTranslateCategory:
+    """translate_category converts canonical Chinese to requested language."""
+
+    def test_translate_zh(self):
+        from db import translate_category
+        assert translate_category("餐飲", "zh") == "餐飲"
+        assert translate_category("交通", "zh") == "交通"
+
+    def test_translate_en(self):
+        from db import translate_category
+        assert translate_category("餐飲", "en") == "dining"
+        assert translate_category("交通", "en") == "transport"
+        assert translate_category("其他", "en") == "other"
+
+    def test_translate_unknown(self):
+        from db import translate_category
+        assert translate_category("unknown_cat", "en") == "unknown_cat"
+        assert translate_category("unknown_cat", "zh") == "unknown_cat"
+
+
+class TestLanguageConfig:
+    """language config key is initialised with default 'zh'."""
+
+    def test_default_language_is_zh(self, tmp_db_path):
+        from db import get_config
+        row = get_config("language", base_dir=tmp_db_path)
+        assert row is not None
+        assert row["value"] == "zh"
+
+    def test_set_language(self, tmp_db_path):
+        from db import set_config, get_config
+        set_config("language", "en", base_dir=tmp_db_path)
+        row = get_config("language", base_dir=tmp_db_path)
+        assert row["value"] == "en"
+
+    def test_set_language_back_to_zh(self, tmp_db_path):
+        from db import set_config, get_config
+        set_config("language", "en", base_dir=tmp_db_path)
+        set_config("language", "zh", base_dir=tmp_db_path)
+        row = get_config("language", base_dir=tmp_db_path)
+        assert row["value"] == "zh"
+
+
+class TestComputeOwesBilingualSplit:
+    """compute_owes skips English-style 'each pays own' split methods."""
+
+    def test_owes_skip_each_pays_own_english(self, tmp_db_path):
+        add_expense("2025-06-01", 100, "餐飲", "Brian", "each-pays-own", "dinner", base_dir=tmp_db_path)
+        result = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(result) == 0
+
+    def test_owes_skip_aa(self, tmp_db_path):
+        add_expense("2025-06-01", 100, "餐飲", "Brian", "aa", "dinner", base_dir=tmp_db_path)
+        result = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(result) == 0
+
+    def test_owes_skip_each_pays_own_with_spaces(self, tmp_db_path):
+        add_expense("2025-06-01", 100, "餐飲", "Brian", "each pays own", "dinner", base_dir=tmp_db_path)
+        result = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(result) == 0
+
+    def test_owes_skip_各自付(self, tmp_db_path):
+        add_expense("2025-06-01", 100, "餐飲", "Brian", "各自付", "dinner", base_dir=tmp_db_path)
+        result = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(result) == 0

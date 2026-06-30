@@ -414,3 +414,81 @@ class TestHandleExpenseConfig:
         data = json.loads(result)
         assert data["ok"] is True
         assert data["value"] is None
+
+
+# ===================================================================
+# Bilingual category tests
+# ===================================================================
+
+class TestHandleBilingualCategories:
+    """Handlers accept English category names and normalize to Chinese."""
+
+    def test_add_with_english_category(self, tmp_db_path):
+        result = cf._handle_expense_add({
+            "amount": 100, "category": "dining", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "lunch",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        list_result = cf._handle_expense_list({"base_dir": tmp_db_path})
+        list_data = json.loads(list_result)
+        assert list_data["expenses"][0]["category"] == "餐飲"
+
+    def test_add_with_mixed_case_english_category(self, tmp_db_path):
+        result = cf._handle_expense_add({
+            "amount": 200, "category": "Transport", "payer": "Partner",
+            "date": "2025-06-18", "split_method": "50/50", "note": "taxi",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        list_result = cf._handle_expense_list({"base_dir": tmp_db_path})
+        list_data = json.loads(list_result)
+        assert list_data["expenses"][0]["category"] == "交通"
+
+    def test_list_filter_by_english_category(self, tmp_db_path):
+        cf._handle_expense_add({
+            "amount": 100, "category": "dining", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "lunch",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_list({
+            "category": "dining", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert len(data["expenses"]) == 1
+
+    def test_report_respects_language_config_en(self, tmp_db_path):
+        cf._handle_expense_config({
+            "action": "set", "key": "language", "value": "en", "base_dir": tmp_db_path,
+        })
+        cf._handle_expense_add({
+            "amount": 100, "category": "dining", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "lunch",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_report({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        for item in data["by_category"]:
+            assert item["category"] == "dining"
+
+    def test_report_respects_language_config_zh(self, tmp_db_path):
+        cf._handle_expense_config({
+            "action": "set", "key": "language", "value": "zh", "base_dir": tmp_db_path,
+        })
+        cf._handle_expense_add({
+            "amount": 100, "category": "dining", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "lunch",
+            "base_dir": tmp_db_path,
+        })
+        result = cf._handle_expense_report({
+            "date_from": "2025-06-01", "date_to": "2025-06-30",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        for item in data["by_category"]:
+            assert item["category"] == "餐飲"

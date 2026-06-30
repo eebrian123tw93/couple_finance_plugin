@@ -107,6 +107,10 @@ plugins/couple-finance/
 - The hyphenated directory name (`couple-finance/`) requires import workarounds for pytest; see `conftest.py` and the dual-import pattern in `__init__.py`
 - `expense_edit` is a planned 7th tool (see `.sisyphus/plans/expense-edit.md`)
 
+### AI-Assisted Development
+
+This project was developed with the assistance of [OpenCode](https://opencode.cloud), an AI-powered coding agent (Sisyphus) working under the orchestration of OhMyOpenCode. Key architectural decisions, code generation, test writing, and documentation were produced through human-AI collaboration.
+
 ## License
 
 MIT

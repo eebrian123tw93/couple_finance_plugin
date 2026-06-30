@@ -14,6 +14,53 @@ except Exception:
 
 _FTS5_AVAILABLE = True
 
+#: Bidirectional category map: Chinese ↔ English, plus lowercase English variants.
+#: All values map to the canonical Chinese name used in DB storage.
+CATEGORY_MAP = {
+    "餐飲": "餐飲", "交通": "交通", "購物": "購物", "娛樂": "娛樂",
+    "住房": "住房", "水電": "水電", "醫療": "醫療", "教育": "教育", "其他": "其他",
+    "dining": "餐飲", "transport": "交通", "shopping": "購物", "entertainment": "娛樂",
+    "housing": "住房", "utilities": "水電", "medical": "醫療", "education": "教育", "other": "其他",
+}
+
+#: Canonical Chinese → English display name, used for output translation.
+CATEGORY_EN = {
+    "餐飲": "dining", "交通": "transport", "購物": "shopping", "娛樂": "entertainment",
+    "住房": "housing", "水電": "utilities", "醫療": "medical", "教育": "education", "其他": "other",
+}
+
+#: All recognized split-method values that mean "each pays own" (skip in owes).
+SPLIT_EACH_PAYS_OWN = {"各付各", "each-pays-own", "each pays own", "各自付", "各自", "aa"}
+
+
+def normalize_category(category):
+    """Normalize a category value to its canonical Chinese form.
+
+    Accepts both Chinese (``餐飲``) and English (``dining``) names.
+    Returns the canonical Chinese value used for DB storage.
+    Falls back to the original input if not recognised.
+    """
+    if not category:
+        return category
+    canonical = CATEGORY_MAP.get(category)
+    if canonical:
+        return canonical
+    canonical = CATEGORY_MAP.get(category.lower())
+    if canonical:
+        return canonical
+    return category
+
+
+def translate_category(category, lang="zh"):
+    """Return *category* in the requested language (``"zh"`` or ``"en"``).
+
+    The input should be the canonical Chinese value stored in the DB.
+    Unknown values are returned unchanged.
+    """
+    if lang == "en" and category in CATEGORY_EN:
+        return CATEGORY_EN[category]
+    return category
+
 
 def get_db_path(base_dir=None):
     if base_dir:
@@ -79,6 +126,7 @@ def _init_schema(conn):
     """)
     conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('payer1', 'Brian')")
     conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('payer2', 'Partner')")
+    conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('language', 'zh')")
 
 
 def get_connection(base_dir=None):
@@ -213,7 +261,7 @@ def compute_owes(date_from, date_to, base_dir=None):
     for exp in expenses:
         exp_dict = dict(exp)
         split_method = exp_dict.get("split_method", "") or ""
-        if split_method == "各付各":
+        if split_method in SPLIT_EACH_PAYS_OWN:
             continue
 
         amount = float(exp_dict["amount"])
