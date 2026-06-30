@@ -4,7 +4,7 @@ A Hermes Agent plugin for shared expense tracking between couples. Built with SQ
 
 ## Overview
 
-Couple Finance (記帳) is a [Hermes Agent](https://hermes.ai) plugin that lets couples track shared expenses through natural language. Tell the agent "晚餐850我付的" and it records a structured expense entry. Ask "這個月花了多少" and it returns an aggregated report with who-owes-whom calculations.
+Couple Finance is a Hermes Agent plugin that lets couples track shared expenses through natural language. Tell the agent "晚餐 850 我付的" (dinner 850, I paid) and it records a structured expense entry. Ask "這個月花了多少" (how much did we spend this month) and it returns an aggregated report with who-owes-whom calculations.
 
 ### Features
 
@@ -21,7 +21,7 @@ Couple Finance (記帳) is a [Hermes Agent](https://hermes.ai) plugin that lets 
 ### Requirements
 
 - Python 3.10+
-- [Hermes Agent](https://hermes.ai) (for runtime)
+- Hermes Agent (for runtime)
 - `pytest` 9.0.3 (for running tests)
 
 ### Installation
@@ -60,10 +60,10 @@ The plugin registers 6 tools under the `couple-finance` toolset:
 
 **Example conversation with the agent:**
 
-> User: 晚餐850我付的  
+> User: "晚餐 850 我付的"  
 > Agent calls `expense_add(amount=850, category="餐飲", payer="Brian", split_method="50/50", note="晚餐")`
 
-> User: 這個月花了多少  
+> User: "這個月花了多少"  
 > Agent calls `expense_report()` → returns category totals, payer totals, and who owes whom
 
 ### Running Tests
