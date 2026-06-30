@@ -4,17 +4,17 @@ A Hermes Agent plugin for shared expense tracking between couples. Built with SQ
 
 ## Overview
 
-Couple Finance is a Hermes Agent plugin that lets couples track shared expenses through natural language. Tell the agent "晚餐 850 我付的" (dinner 850, I paid) and it records a structured expense entry. Ask "這個月花了多少" (how much did we spend this month) and it returns an aggregated report with who-owes-whom calculations.
+Couple Finance is a Hermes Agent plugin that lets couples track shared expenses through natural language. Tell the agent "dinner 850, I paid" and it records a structured expense entry. Ask "how much did we spend this month" and it returns an aggregated report with who-owes-whom calculations.
 
 ### Features
 
 - **6 Hermes tools**: `expense_add`, `expense_list`, `expense_report`, `expense_delete`, `expense_search`, `expense_config`
 - **Natural language interface**: the LLM auto-fills category, payer, and amount from casual speech
-- **Flexible split methods**: 50/50, 60/40, 各付各 (each pays own), or custom ratios
+- **Flexible split methods**: 50/50, 60/40, each-pays-own, or custom ratios
 - **Owes computation**: automatically calculates who owes whom based on split rules
 - **Full-text search**: FTS5-powered search on notes and categories (falls back to LIKE if unavailable)
 - **Soft delete**: expenses are preserved in the database but excluded from queries
-- **Configurable payers**: customize payer names (e.g., 小明 & 小華)
+- **Configurable payers**: customize payer names
 - **No external dependencies**: Python stdlib only (`sqlite3`, `json`, `pathlib`)
 - **Test suite**: 94+ tests with isolated temp databases
 
@@ -56,14 +56,14 @@ The plugin registers 6 tools under the `couple-finance` toolset:
 | `expense_search` | Full-text search across notes and categories |
 | `expense_config` | Get or set configuration (payer names, etc.) |
 
-① Categories: 餐飲 (dining), 交通 (transport), 購物 (shopping), 娛樂 (entertainment), 住房 (housing), 水電 (utilities), 醫療 (medical), 教育 (education), 其他 (other)
+① Categories: dining, transport, shopping, entertainment, housing, utilities, medical, education, other
 
 **Example conversation with the agent:**
 
-> User: "晚餐 850 我付的"  
-> Agent calls `expense_add(amount=850, category="餐飲", payer="Brian", split_method="50/50", note="晚餐")`
+> User: "dinner 850, I paid"  
+> Agent calls `expense_add(amount=850, category="dining", payer="Alice", split_method="50/50", note="dinner")`
 
-> User: "這個月花了多少"  
+> User: "how much did we spend this month"  
 > Agent calls `expense_report()` → returns category totals, payer totals, and who owes whom
 
 ### Running Tests
