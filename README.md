@@ -31,9 +31,9 @@ Couple Finance is a Hermes Agent plugin that lets couples track shared expenses 
 git clone <repo-url>
 cd couple_finance_plugin
 
-# 2. Symlink the plugin to Hermes plugins directory
+# 2. Copy the plugin to Hermes plugins directory
 mkdir -p ~/.hermes/plugins
-ln -sfn $(pwd)/plugins/couple-finance ~/.hermes/plugins/couple-finance
+cp -r plugins/couple-finance ~/.hermes/plugins/couple-finance
 
 # 3. Enable the plugin and toolset in ~/.hermes/config.yaml
 #    plugins:
