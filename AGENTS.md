@@ -7,8 +7,8 @@ Hermes Agent plugin for couple expense tracking (記帳). Single plugin under `p
 ```
 plugins/couple-finance/
   plugin.yaml        # Metadata: name, version, description
-  __init__.py        # register(ctx) entry point, 6 tool schemas + handlers
-  db.py              # SQLite schema, connection, CRUD (12 public functions)
+  __init__.py        # register(ctx) entry point, 7 tool schemas + handlers
+  db.py              # SQLite schema, connection, CRUD (13 public functions)
   conftest.py        # Prevents pytest from collecting hyphenated dir as test module
   tests/
     __init__.py
@@ -47,6 +47,7 @@ python3 -m pytest plugins/couple-finance/tests/ --co -q
 - **All tests use isolated temp databases** via `tmp_db_path` fixture — never `~/.hermes/`
 - Every public db.py function is tested with ≥1 happy-path test
 - `compute_owes` is the most complex function — 12+ tests cover: 50/50, 60/40, 各付各, empty split, negative amounts, zero-share splits, multi-entry accumulation, unknown payer, invalid split string, date range, deleted exclusion
+- `edit_expense` is a PATCH-style partial update: returns `(new_row, changes_dict)` with a diff of only changed fields; handler wraps this as a `"diff"` key in the JSON response
 - Soft-delete consistency: every query function (`list_expenses`, `report_*`, `search_expenses`, `compute_owes`) must exclude `is_deleted=1` records by default
 - Handlers are tested through `cf._handle_*()` calls (not via Hermes), always passing `base_dir` as a param not exposed in tool schemas
 - MockCtx records `register_tool()` calls — used to verify tool registration without Hermes
@@ -55,7 +56,7 @@ python3 -m pytest plugins/couple-finance/tests/ --co -q
 ## Database
 
 - SQLite with WAL mode and foreign keys enabled
-- Tables: `expenses` (id, date, amount, category, payer, split_method, note, is_deleted, created_at), `config` (key, value)
+- Tables: `expenses` (id, date, amount, category, payer, split_method, note, is_deleted, created_at, updated_at, edit_reason), `config` (key, value)
 - FTS5 virtual table (`expenses_fts`) for full-text search on `note` + `category` — **only if SQLite compiled with FTS5**; runtime fallback to `LIKE` queries
 - Soft delete via `is_deleted=1` flag — all query functions exclude deleted by default
 - `config` table stores payer names (`payer1`, `payer2` defaults: Brian, Partner) and arbitrary k/v
@@ -76,9 +77,8 @@ git commit -m "test(couple-finance): description"
 
 ## Architecture notes
 
-- The plugin has **6 registered tools**: `expense_add`, `expense_list`, `expense_report`, `expense_delete`, `expense_search`, `expense_config`
+- The plugin has **7 registered tools**: `expense_add`, `expense_list`, `expense_report`, `expense_delete`, `expense_edit`, `expense_search`, `expense_config`
 - All tool handlers return `json.dumps({"ok": True, ...})` or `json.dumps({"error": str(e)})`
 - `base_dir` param exists on all handlers/db functions but is **not in tool schemas** — it's test-only infrastructure
-- `expense_edit` is a planned but not yet implemented 7th tool (see `.sisyphus/plans/expense-edit.md`)
 - No linter, formatter, or type checker configuration exists
 - `.gitignore` ensures `.sisyphus/` and `__pycache__/` are never committed

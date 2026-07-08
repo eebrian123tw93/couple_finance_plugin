@@ -8,7 +8,7 @@ Couple Finance is a Hermes Agent plugin that lets couples track shared expenses 
 
 ### Features
 
-- **6 Hermes tools**: `expense_add`, `expense_list`, `expense_report`, `expense_delete`, `expense_search`, `expense_config`
+- **7 Hermes tools**: `expense_add`, `expense_list`, `expense_report`, `expense_delete`, `expense_edit`, `expense_search`, `expense_config`
 - **Natural language interface**: the LLM auto-fills category, payer, and amount from casual speech
 - **Flexible split methods**: 50/50, 60/40, each-pays-own, or custom ratios
 - **Owes computation**: automatically calculates who owes whom based on split rules
@@ -16,7 +16,7 @@ Couple Finance is a Hermes Agent plugin that lets couples track shared expenses 
 - **Soft delete**: expenses are preserved in the database but excluded from queries
 - **Configurable payers**: customize payer names
 - **No external dependencies**: Python stdlib only (`sqlite3`, `json`, `pathlib`)
-- **Test suite**: 94+ tests with isolated temp databases
+- **Test suite**: 148 tests with isolated temp databases
 
 ### Requirements
 
@@ -45,7 +45,7 @@ cp -r plugins/couple-finance ~/.hermes/plugins/couple-finance
 
 ### Usage
 
-The plugin registers 6 tools under the `couple-finance` toolset:
+The plugin registers 7 tools under the `couple-finance` toolset:
 
 | Tool | Description |
 |------|-------------|
@@ -53,6 +53,7 @@ The plugin registers 6 tools under the `couple-finance` toolset:
 | `expense_list` | List expenses with filters (date range, category, payer, pagination) |
 | `expense_report` | Aggregated report by category, by payer, summary, and owes calculation |
 | `expense_delete` | Soft-delete an expense by ID |
+| `expense_edit` | PATCH-style partial update of an expense; returns the updated record plus a diff of changed fields |
 | `expense_search` | Full-text search across notes and categories |
 | `expense_config` | Get or set configuration (payer names, etc.) |
 
@@ -65,6 +66,9 @@ The plugin registers 6 tools under the `couple-finance` toolset:
 
 > User: "how much did we spend this month"  
 > Agent calls `expense_report()` → returns category totals, payer totals, and who owes whom
+
+> User: "fix that dinner to 950 and change category to dining"  
+> Agent calls `expense_edit(expense_id=3, amount=950, category="dining")` → returns updated record + `{"diff": {"amount": {"old": 850.0, "new": 950.0}, "category": {"old": "交通", "new": "餐飲"}}}`
 
 ### Running Tests
 
@@ -83,8 +87,8 @@ All tests use isolated temporary databases — never writes to your production D
 ```
 plugins/couple-finance/
   plugin.yaml          # Plugin metadata
-  __init__.py          # Entry point: register() + 6 tool handlers
-  db.py                # SQLite schema, connection, CRUD (12 public functions)
+  __init__.py          # Entry point: register() + 7 tool handlers
+  db.py                # SQLite schema, connection, CRUD (13 public functions)
   conftest.py          # Pytest collection workaround for hyphenated dir
   tests/
     conftest.py        # Fixtures: tmp_db_path, fresh_db, MockCtx
@@ -105,7 +109,7 @@ plugins/couple-finance/
 - All handlers return `json.dumps({"ok": True, ...})` on success, `json.dumps({"error": str(e)})` on failure
 - The `base_dir` parameter on handlers and db functions is test-only infrastructure — not exposed in tool schemas
 - The hyphenated directory name (`couple-finance/`) requires import workarounds for pytest; see `conftest.py` and the dual-import pattern in `__init__.py`
-- `expense_edit` is a planned 7th tool (see `.sisyphus/plans/expense-edit.md`)
+- `expense_edit` is a PATCH-style partial update — only provided fields are changed; the response includes a `"diff"` object showing only what changed
 
 ### AI-Assisted Development
 
