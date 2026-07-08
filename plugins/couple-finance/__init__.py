@@ -7,6 +7,7 @@ try:
         add_expense, list_expenses, report_by_category, report_by_payer,
         report_summary, delete_expense, search_expenses, compute_owes,
         get_config, set_config, normalize_category, translate_category,
+        edit_expense,
     )
 except ImportError:
     # pytest discovers hyphenated dirs as test modules; use absolute imports
@@ -14,6 +15,7 @@ except ImportError:
         add_expense, list_expenses, report_by_category, report_by_payer,
         report_summary, delete_expense, search_expenses, compute_owes,
         get_config, set_config, normalize_category, translate_category,
+        edit_expense,
     )
 
 # --- Tool Schemas ---
@@ -73,6 +75,25 @@ EXPENSE_DELETE_SCHEMA = {
         "properties": {
             "expense_id": {"type": "integer", "description": "ID of the expense to delete"},
             "reason": {"type": "string", "description": "Optional reason for deletion"}
+        },
+        "required": ["expense_id"]
+    }
+}
+
+EXPENSE_EDIT_SCHEMA = {
+    "name": "expense_edit",
+    "description": "Edit an existing expense. PATCH-style partial update — only provided fields are changed. Returns the full updated record plus a diff of what changed.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "expense_id": {"type": "integer", "description": "ID of the expense to edit"},
+            "amount": {"type": "number", "description": "New amount"},
+            "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他", "dining", "transport", "shopping", "entertainment", "housing", "utilities", "medical", "education", "other"], "description": "New category — accepts Chinese (e.g. 餐飲) or English (e.g. dining)."},
+            "date": {"type": "string", "description": "New date in YYYY-MM-DD format"},
+            "payer": {"type": "string", "description": "New payer"},
+            "split_method": {"type": "string", "description": "New split method"},
+            "note": {"type": "string", "description": "New note text"},
+            "reason": {"type": "string", "description": "Reason for editing"}
         },
         "required": ["expense_id"]
     }
@@ -183,6 +204,34 @@ def _handle_expense_delete(args: dict, **kw) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+def _handle_expense_edit(args: dict, **kw) -> str:
+    try:
+        expense_id = args["expense_id"]
+        base_dir = args.get("base_dir")
+
+        # Build kwargs with only editable fields that were provided
+        editable = ["amount", "category", "date", "payer", "split_method", "note"]
+        kwargs = {}
+        for field in editable:
+            if field in args:
+                kwargs[field] = args[field]
+
+        # Normalize category if provided
+        if "category" in kwargs:
+            kwargs["category"] = normalize_category(kwargs["category"])
+
+        # Add reason if provided
+        if "reason" in args:
+            kwargs["reason"] = args["reason"]
+
+        record, changes = edit_expense(expense_id, base_dir=base_dir, **kwargs)
+        return json.dumps({"ok": True, "id": expense_id, "expense": record, "diff": changes}, ensure_ascii=False)
+    except ValueError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 def _handle_expense_search(args: dict, **kw) -> str:
     try:
         keyword = args["keyword"]
@@ -220,5 +269,6 @@ def register(ctx):
     ctx.register_tool(name="expense_list", toolset="couple-finance", schema=EXPENSE_LIST_SCHEMA, handler=_handle_expense_list)
     ctx.register_tool(name="expense_report", toolset="couple-finance", schema=EXPENSE_REPORT_SCHEMA, handler=_handle_expense_report)
     ctx.register_tool(name="expense_delete", toolset="couple-finance", schema=EXPENSE_DELETE_SCHEMA, handler=_handle_expense_delete)
+    ctx.register_tool(name="expense_edit", toolset="couple-finance", schema=EXPENSE_EDIT_SCHEMA, handler=_handle_expense_edit)
     ctx.register_tool(name="expense_search", toolset="couple-finance", schema=EXPENSE_SEARCH_SCHEMA, handler=_handle_expense_search)
     ctx.register_tool(name="expense_config", toolset="couple-finance", schema=EXPENSE_CONFIG_SCHEMA, handler=_handle_expense_config)

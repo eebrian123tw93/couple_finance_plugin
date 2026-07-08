@@ -86,6 +86,13 @@ def _init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_expenses_payer ON expenses(payer)")
 
+    # Migration: add updated_at and edit_reason columns (safe for fresh installs AND upgrades)
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(expenses)").fetchall()}
+    if "updated_at" not in existing_columns:
+        conn.execute("ALTER TABLE expenses ADD COLUMN updated_at TEXT")
+    if "edit_reason" not in existing_columns:
+        conn.execute("ALTER TABLE expenses ADD COLUMN edit_reason TEXT DEFAULT ''")
+
     global _FTS5_AVAILABLE
     try:
         conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS _fts5_check USING fts5(x)")
@@ -224,6 +231,47 @@ def delete_expense(expense_id, base_dir=None):
         cur = conn.execute("UPDATE expenses SET is_deleted=1 WHERE id=? AND is_deleted=0", (expense_id,))
         conn.commit()
         return cur.rowcount > 0
+
+
+UPDATABLE_FIELDS = ("date", "amount", "category", "payer", "split_method", "note")
+
+
+def edit_expense(expense_id, base_dir=None, **fields):
+    with closing(get_connection(base_dir)) as conn:
+        row = conn.execute("SELECT * FROM expenses WHERE id=?", (expense_id,)).fetchone()
+        if row is None:
+            raise ValueError("Expense not found")
+        old_row = dict(row)
+
+        provided = {k: v for k, v in fields.items() if k in UPDATABLE_FIELDS}
+        if not provided:
+            raise ValueError("No fields to update")
+
+        set_clauses = []
+        params = []
+        for key, value in provided.items():
+            set_clauses.append(f"{key}=?")
+            params.append(value)
+
+        set_clauses.append("updated_at=datetime('now', 'localtime')")
+        edit_reason = fields.get("reason", "")
+        set_clauses.append("edit_reason=?")
+        params.append(edit_reason)
+
+        params.append(expense_id)
+        conn.execute(
+            f"UPDATE expenses SET {', '.join(set_clauses)} WHERE id=?",
+            tuple(params),
+        )
+        conn.commit()
+
+        new_row = dict(conn.execute("SELECT * FROM expenses WHERE id=?", (expense_id,)).fetchone())
+        changes = {}
+        for key in provided:
+            if old_row[key] != new_row[key]:
+                changes[key] = {"old": old_row[key], "new": new_row[key]}
+
+    return (new_row, changes)
 
 
 def search_expenses(keyword, limit=20, base_dir=None):

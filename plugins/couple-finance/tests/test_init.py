@@ -53,9 +53,9 @@ def mock_ctx():
 # ===================================================================
 
 class TestRegister:
-    def test_register_calls_six_tools(self, mock_ctx):
+    def test_register_calls_seven_tools(self, mock_ctx):
         cf.register(mock_ctx)
-        assert len(mock_ctx.tools) == 6
+        assert len(mock_ctx.tools) == 7
 
     def test_register_tool_names(self, mock_ctx):
         cf.register(mock_ctx)
@@ -66,6 +66,7 @@ class TestRegister:
         assert "expense_delete" in names
         assert "expense_search" in names
         assert "expense_config" in names
+        assert "expense_edit" in names
 
     def test_register_toolset(self, mock_ctx):
         cf.register(mock_ctx)
@@ -492,3 +493,165 @@ class TestHandleBilingualCategories:
         data = json.loads(result)
         for item in data["by_category"]:
             assert item["category"] == "餐飲"
+
+
+# ===================================================================
+# _handle_expense_edit tests
+# ===================================================================
+
+class TestHandleExpenseEdit:
+
+    def test_success_returns_expense_and_diff(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "amount": 200, "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["id"] == eid
+        assert "expense" in data
+        assert data["expense"]["amount"] == 200
+        assert "diff" in data
+        assert data["diff"]["amount"]["old"] == 100
+        assert data["diff"]["amount"]["new"] == 200
+
+    def test_edit_multiple_fields(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "amount": 200, "note": "晚餐",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["expense"]["amount"] == 200
+        assert data["expense"]["note"] == "晚餐"
+
+    def test_edit_preserves_omitted_fields(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "amount": 200, "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["expense"]["category"] == "餐飲"
+        assert data["expense"]["payer"] == "Brian"
+        assert data["expense"]["split_method"] == "50/50"
+
+    def test_edit_with_reason(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "amount": 200, "reason": "corrected",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["expense"]["edit_reason"] == "corrected"
+
+    def test_no_fields_error(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert "error" in data
+
+    def test_only_reason_error(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "reason": "just a note",
+            "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert "error" in data
+
+    def test_nonexistent_id_error(self, tmp_db_path):
+        result = cf._handle_expense_edit({
+            "expense_id": 9999, "amount": 200, "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert "error" in data
+
+    def test_category_normalized(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "category": "dining", "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["expense"]["category"] == "餐飲"
+
+    def test_edit_soft_deleted(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        cf._handle_expense_delete({"expense_id": eid, "base_dir": tmp_db_path})
+
+        result = cf._handle_expense_edit({
+            "expense_id": eid, "amount": 200, "base_dir": tmp_db_path,
+        })
+        data = json.loads(result)
+        assert data["ok"] is True
+        assert data["expense"]["is_deleted"] == 1
+
+    def test_edit_then_list_reflects_changes(self, tmp_db_path):
+        add_result = cf._handle_expense_add({
+            "amount": 100, "category": "餐飲", "payer": "Brian",
+            "date": "2025-06-18", "split_method": "50/50", "note": "午餐",
+            "base_dir": tmp_db_path,
+        })
+        eid = json.loads(add_result)["id"]
+
+        cf._handle_expense_edit({
+            "expense_id": eid, "amount": 300, "base_dir": tmp_db_path,
+        })
+
+        list_result = cf._handle_expense_list({"base_dir": tmp_db_path})
+        list_data = json.loads(list_result)
+        assert len(list_data["expenses"]) >= 1
+        assert any(e["amount"] == 300 for e in list_data["expenses"])

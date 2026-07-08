@@ -4,7 +4,7 @@ import pytest
 from db import (
     add_expense, list_expenses, report_by_category, report_by_payer,
     report_summary, delete_expense, search_expenses, compute_owes,
-    get_config, set_config, get_connection,
+    get_config, set_config, get_connection, edit_expense,
 )
 
 
@@ -575,3 +575,129 @@ class TestComputeOwesBilingualSplit:
         add_expense("2025-06-01", 100, "餐飲", "Brian", "各自付", "dinner", base_dir=tmp_db_path)
         result = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
         assert len(result) == 0
+
+
+class TestEditExpense:
+    """Tests for edit_expense() — PATCH-style partial updates."""
+
+    def test_edit_amount(self, tmp_db_path):
+        """Add expense with amount=100, edit to 200, verify returned record has amount=200."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "午餐", base_dir=tmp_db_path)
+        record, changes = edit_expense(eid, amount=200, base_dir=tmp_db_path)
+        assert record["amount"] == 200
+        assert record["id"] == eid
+
+    def test_edit_multiple_fields(self, tmp_db_path):
+        """Edit amount + category + note simultaneously, verify all changed."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "午餐", base_dir=tmp_db_path)
+        record, changes = edit_expense(eid, amount=250, category="交通", note="計程車", base_dir=tmp_db_path)
+        assert record["amount"] == 250
+        assert record["category"] == "交通"
+        assert record["note"] == "計程車"
+
+    def test_edit_patch_preserves_omitted_fields(self, tmp_db_path):
+        """Edit only amount, verify date/category/payer/split_method/note unchanged."""
+        eid = add_expense("2025-06-18", 100, "餐飲", "Brian", "50/50", "午餐", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=200, base_dir=tmp_db_path)
+        assert record["date"] == "2025-06-18"
+        assert record["category"] == "餐飲"
+        assert record["payer"] == "Brian"
+        assert record["split_method"] == "50/50"
+        assert record["note"] == "午餐"
+
+    def test_edit_returns_full_record(self, tmp_db_path):
+        """Verify returned dict has all expense fields (id, date, amount, category, payer, split_method, note, is_deleted)."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=150, base_dir=tmp_db_path)
+        assert "id" in record
+        assert "date" in record
+        assert "amount" in record
+        assert "category" in record
+        assert "payer" in record
+        assert "split_method" in record
+        assert "note" in record
+        assert "is_deleted" in record
+
+    def test_edit_returns_changes_diff(self, tmp_db_path):
+        """Verify changes dict shows old→new per field."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "午餐", base_dir=tmp_db_path)
+        record, changes = edit_expense(eid, amount=200, note="晚餐", base_dir=tmp_db_path)
+        assert "amount" in changes
+        assert changes["amount"]["old"] == 100
+        assert changes["amount"]["new"] == 200
+        assert "note" in changes
+        assert changes["note"]["old"] == "午餐"
+        assert changes["note"]["new"] == "晚餐"
+
+    def test_edit_updates_updated_at(self, tmp_db_path):
+        """Verify updated_at is set (not None/empty) after edit."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=150, base_dir=tmp_db_path)
+        assert record.get("updated_at") is not None
+        assert record["updated_at"] != ""
+
+    def test_edit_reason_stored(self, tmp_db_path):
+        """Edit with reason='corrected amount', verify edit_reason in DB record."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=200, reason="corrected amount", base_dir=tmp_db_path)
+        assert record.get("edit_reason") == "corrected amount"
+
+    def test_edit_reason_default_empty(self, tmp_db_path):
+        """Edit without reason, verify edit_reason is empty string."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=150, base_dir=tmp_db_path)
+        assert record.get("edit_reason") == ""
+
+    def test_edit_nonexistent_id_raises_error(self, tmp_db_path):
+        """Call edit_expense(9999, amount=200), expect ValueError with 'not found' in message."""
+        with pytest.raises(ValueError) as exc_info:
+            edit_expense(9999, amount=200, base_dir=tmp_db_path)
+        assert "not found" in str(exc_info.value).lower()
+
+    def test_edit_no_fields_raises_error(self, tmp_db_path):
+        """Call edit_expense(eid, base_dir=tmp_db_path), expect ValueError with 'no fields'."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        with pytest.raises(ValueError) as exc_info:
+            edit_expense(eid, base_dir=tmp_db_path)
+        assert "no fields" in str(exc_info.value).lower()
+
+    def test_edit_only_reason_raises_error(self, tmp_db_path):
+        """Call edit_expense(eid, reason='no change'), expect ValueError with 'no fields'."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        with pytest.raises(ValueError) as exc_info:
+            edit_expense(eid, reason="no change", base_dir=tmp_db_path)
+        assert "no fields" in str(exc_info.value).lower()
+
+    def test_edit_soft_deleted_stays_deleted(self, tmp_db_path):
+        """Add expense, soft-delete it, edit it, verify is_deleted=1 in returned record."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        delete_expense(eid, base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, amount=200, base_dir=tmp_db_path)
+        assert record["is_deleted"] == 1
+
+    def test_edit_category_normalized(self, tmp_db_path):
+        """Edit category to 'transport' — db layer stores as-is (normalization is handler-layer concern)."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        record, _ = edit_expense(eid, category="transport", base_dir=tmp_db_path)
+        # db layer stores raw value; handler applies normalize_category before calling edit_expense
+        assert record["category"] == "transport"
+
+    def test_edit_fts_sync(self, tmp_db_path):
+        """Add expense with note 'oldnote', search (found), edit note to 'newnote', old not found, new found."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "oldnote", base_dir=tmp_db_path)
+        results_before = search_expenses("oldnote", base_dir=tmp_db_path)
+        assert len(results_before) >= 1
+        edit_expense(eid, note="newnote", base_dir=tmp_db_path)
+        results_old = search_expenses("oldnote", base_dir=tmp_db_path)
+        assert len(results_old) == 0
+        results_new = search_expenses("newnote", base_dir=tmp_db_path)
+        assert len(results_new) >= 1
+
+    def test_edit_then_list_shows_updates(self, tmp_db_path):
+        """Add expense amount=100, edit to amount=300, list expenses, verify amount=300 in list."""
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "test", base_dir=tmp_db_path)
+        edit_expense(eid, amount=300, base_dir=tmp_db_path)
+        results = list_expenses(base_dir=tmp_db_path)
+        assert len(results) == 1
+        assert results[0]["amount"] == 300
+

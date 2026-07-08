@@ -21,7 +21,7 @@ spec.loader.exec_module(cf)
 from db import (  # noqa: E402
     add_expense, list_expenses, delete_expense, search_expenses,
     report_by_category, report_by_payer, report_summary, compute_owes,
-    get_config, set_config, get_connection,
+    get_config, set_config, get_connection, edit_expense,
 )
 
 
@@ -212,3 +212,72 @@ class TestE2EBilingual:
         owes = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
         assert len(owes) == 1
         assert owes[0]["amount"] == 100.0
+
+
+class TestE2EEditFlow:
+    """End-to-end tests for expense editing flow."""
+
+    def test_add_edit_report_flow(self, tmp_db_path):
+        eid = add_expense("2025-06-18", 100, "餐飲", "Brian", "50/50", "晚餐", base_dir=tmp_db_path)
+        edit_expense(eid, amount=200, base_dir=tmp_db_path)
+        by_cat = report_by_category("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        cat_dict = {r["category"]: r for r in by_cat}
+        assert "餐飲" in cat_dict
+        assert cat_dict["餐飲"]["total"] == 200.0
+
+    def test_edit_soft_deleted_consistency(self, tmp_db_path):
+        eid = add_expense("2025-06-01", 100, "餐飲", "Brian", "50/50", "deleted expense", base_dir=tmp_db_path)
+        delete_expense(eid, base_dir=tmp_db_path)
+        edit_expense(eid, amount=200, base_dir=tmp_db_path)
+
+        items = list_expenses(base_dir=tmp_db_path)
+        assert len(items) == 0
+
+        by_cat = report_by_category("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(by_cat) == 0
+
+        results = search_expenses("deleted", base_dir=tmp_db_path)
+        assert len(results) == 0
+
+        owes = compute_owes("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        assert len(owes) == 0
+
+        all_items = list_expenses(include_deleted=True, base_dir=tmp_db_path)
+        assert len(all_items) == 1
+        assert all_items[0]["is_deleted"] == 1
+        assert all_items[0]["amount"] == 200.0
+
+    def test_edit_then_search_consistency(self, tmp_db_path):
+        eid = add_expense("2025-06-18", 50, "餐飲", "Brian", "50/50", "oldnote", base_dir=tmp_db_path)
+        edit_expense(eid, note="newnote", base_dir=tmp_db_path)
+
+        old_results = search_expenses("oldnote", base_dir=tmp_db_path)
+        assert len(old_results) == 0
+
+        new_results = search_expenses("newnote", base_dir=tmp_db_path)
+        assert len(new_results) >= 1
+        assert any(r["note"] == "newnote" for r in new_results)
+
+    def test_edit_multiple_times(self, tmp_db_path):
+        eid = add_expense("2025-06-18", 100, "餐飲", "Brian", "50/50", "multi-edit", base_dir=tmp_db_path)
+
+        edit_expense(eid, amount=150, base_dir=tmp_db_path)
+        items = list_expenses(base_dir=tmp_db_path)
+        assert items[0]["amount"] == 150.0
+
+        first_updated = items[0].get("updated_at")
+
+        edit_expense(eid, amount=300, base_dir=tmp_db_path)
+        items = list_expenses(base_dir=tmp_db_path)
+        assert items[0]["amount"] == 300.0
+        assert items[0].get("updated_at") is not None
+
+    def test_edit_category_report_grouping(self, tmp_db_path):
+        eid = add_expense("2025-06-18", 100, "餐飲", "Brian", "50/50", "category change", base_dir=tmp_db_path)
+        edit_expense(eid, category="交通", base_dir=tmp_db_path)
+
+        by_cat = report_by_category("2025-06-01", "2025-06-30", base_dir=tmp_db_path)
+        cat_dict = {r["category"]: r for r in by_cat}
+        assert "交通" in cat_dict
+        assert cat_dict["交通"]["total"] == 100.0
+        assert "餐飲" not in cat_dict
