@@ -76,7 +76,7 @@ def _init_schema(conn):
             amount REAL NOT NULL,
             category TEXT NOT NULL,
             payer TEXT NOT NULL DEFAULT '',
-            split_method TEXT DEFAULT '',
+            split_method TEXT DEFAULT '50/50',
             note TEXT DEFAULT '',
             is_deleted INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now', 'localtime'))

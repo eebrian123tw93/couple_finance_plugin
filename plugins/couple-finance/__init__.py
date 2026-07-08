@@ -28,7 +28,7 @@ EXPENSE_ADD_SCHEMA = {
             "category": {"type": "string", "enum": ["餐飲", "交通", "購物", "娛樂", "住房", "水電", "醫療", "教育", "其他", "dining", "transport", "shopping", "entertainment", "housing", "utilities", "medical", "education", "other"], "description": "Expense category — accepts Chinese (e.g. 餐飲) or English (e.g. dining). Infer from context."},
             "date": {"type": "string", "description": "Date in YYYY-MM-DD format. Default to today if not specified."},
             "payer": {"type": "string", "description": "Who paid (e.g. Brian, Partner, 共同)"},
-            "split_method": {"type": "string", "description": "How to split: 50/50, 60/40, 各付各 / each-pays-own, or empty"},
+            "split_method": {"type": "string", "description": "How to split: 50/50, 60/40, 各付各 / each-pays-own. Defaults to 50/50."},
             "note": {"type": "string", "description": "Free-text description of the expense"}
         },
         "required": ["amount"]
@@ -114,7 +114,7 @@ def _handle_expense_add(args: dict, **kw) -> str:
         category = normalize_category(args.get("category", "其他"))
         expense_date = args.get("date", date.today().isoformat())
         payer = args.get("payer", "")
-        split_method = args.get("split_method", "")
+        split_method = args.get("split_method", "50/50")
         note = args.get("note", "")
         base_dir = args.get("base_dir")
 
