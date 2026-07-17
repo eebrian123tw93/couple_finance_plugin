@@ -115,6 +115,12 @@ plugins/couple-finance/
 
 本專案藉助 [OpenCode](https://opencode.cloud) 開發。OpenCode 是一個由 AI 驅動的程式碼代理（Sisyphus），在 OhMyOpenCode 的編排下協作完成。包括架構決策、程式碼生成、測試編寫及文件撰寫，皆為人機協作的成果。
 
+## 支持
+
+如果您覺得這個插件有用，歡迎支持開發：
+
+[![ko-fi](https://ko-fi.com/img/github_button_sm.svg)](https://ko-fi.com/eebrian123tw93)
+
 ## 授權條款
 
 MIT

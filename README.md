@@ -115,6 +115,12 @@ plugins/couple-finance/
 
 This project was developed with the assistance of [OpenCode](https://opencode.cloud), an AI-powered coding agent (Sisyphus) working under the orchestration of OhMyOpenCode. Key architectural decisions, code generation, test writing, and documentation were produced through human-AI collaboration.
 
+## Support
+
+If you find this plugin useful, consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/github_button_sm.svg)](https://ko-fi.com/eebrian123tw93)
+
 ## License
 
 MIT
