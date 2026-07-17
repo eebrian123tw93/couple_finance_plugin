@@ -119,7 +119,7 @@ This project was developed with the assistance of [OpenCode](https://opencode.cl
 
 If you find this plugin useful, consider supporting its development:
 
-[![ko-fi](https://ko-fi.com/img/github_button_sm.svg)](https://ko-fi.com/eebrian123tw93)
+[<img src="https://cdn.prod.website-files.com/5c14e387dab576fe667689cf/670f5a01c01ea9191809398c_support_me_on_kofi_blue.avif" alt="Support me on Ko-fi" width="200">](https://ko-fi.com/eebrian123tw93)
 
 ## License
 

@@ -119,7 +119,7 @@ plugins/couple-finance/
 
 如果您覺得這個插件有用，歡迎支持開發：
 
-[![ko-fi](https://ko-fi.com/img/github_button_sm.svg)](https://ko-fi.com/eebrian123tw93)
+[<img src="https://cdn.prod.website-files.com/5c14e387dab576fe667689cf/670f5a01c01ea9191809398c_support_me_on_kofi_blue.avif" alt="Support me on Ko-fi" width="200">](https://ko-fi.com/eebrian123tw93)
 
 ## 授權條款
 
